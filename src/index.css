@@ -1,0 +1,228 @@
+@import "tailwindcss";
+@import "@fontsource-variable/nunito";
+
+/* Design tokens. Duolingo-inspired chunky palette, tuned for Ochakovo:
+   green = fresh/primary action, amber = kvass, blue = info, red = error. */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f7f7f7;
+  --line: #e5e5e5;
+  --line-strong: #d0d0d0;
+  --ink: #3c3c3c;
+  --ink-soft: #777777;
+  --ink-faint: #afafaf;
+
+  --green: #58cc02;
+  --green-d: #46a302;
+  --green-l: #d7ffb8;
+  --amber: #ff9600;
+  --amber-d: #cc7800;
+  --amber-l: #fff1d6;
+  --kvass: #b8620f;
+  --kvass-d: #8a4508;
+  --blue: #1cb0f6;
+  --blue-d: #1899d6;
+  --blue-l: #ddf4ff;
+  --red: #ff4b4b;
+  --red-d: #ea2b2b;
+  --red-l: #ffdfe0;
+  --yellow: #ffc800;
+  --yellow-d: #e5a800;
+  --purple: #ce82ff;
+  --purple-d: #a560e8;
+  --pink: #ff86d0;
+  --foam: #fffaf0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131f24;
+    --surface: #131f24;
+    --surface-2: #202f36;
+    --line: #37464f;
+    --line-strong: #52656d;
+    --ink: #f1f7fb;
+    --ink-soft: #a9b8c0;
+    --ink-faint: #6f8590;
+    --green-l: #1f3a12;
+    --amber-l: #3a2a10;
+    --blue-l: #10334a;
+    --red-l: #45201f;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131f24;
+  --surface: #131f24;
+  --surface-2: #202f36;
+  --line: #37464f;
+  --line-strong: #52656d;
+  --ink: #f1f7fb;
+  --ink-soft: #a9b8c0;
+  --ink-faint: #6f8590;
+  --green-l: #1f3a12;
+  --amber-l: #3a2a10;
+  --blue-l: #10334a;
+  --red-l: #45201f;
+}
+
+@theme {
+  --font-sans: "Nunito Variable", ui-rounded, system-ui, sans-serif;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-green: var(--green);
+  --color-green-d: var(--green-d);
+  --color-green-l: var(--green-l);
+  --color-amber: var(--amber);
+  --color-amber-d: var(--amber-d);
+  --color-amber-l: var(--amber-l);
+  --color-kvass: var(--kvass);
+  --color-blue: var(--blue);
+  --color-blue-d: var(--blue-d);
+  --color-blue-l: var(--blue-l);
+  --color-red: var(--red);
+  --color-red-d: var(--red-d);
+  --color-red-l: var(--red-l);
+  --color-yellow: var(--yellow);
+  --color-yellow-d: var(--yellow-d);
+  --color-purple: var(--purple);
+  --color-purple-d: var(--purple-d);
+  --color-pink: var(--pink);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+button {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+::selection {
+  background: var(--green-l);
+}
+
+/* The signature chunky 3D button: solid fill + darker "lip" via box-shadow.
+   Pressing removes the lip and moves the face down, like a real key. */
+.btn3d {
+  --c: var(--green);
+  --cd: var(--green-d);
+  --fg: #fff;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 16px;
+  padding: 0.85rem 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  color: var(--fg);
+  background: var(--c);
+  box-shadow: 0 4px 0 var(--cd);
+  transform: translateY(0);
+  transition:
+    transform 80ms ease-out,
+    box-shadow 80ms ease-out,
+    filter 150ms ease-out;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .btn3d:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+}
+.btn3d:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--cd);
+}
+.btn3d:disabled {
+  --c: var(--line);
+  --cd: var(--line-strong);
+  --fg: var(--ink-faint);
+  cursor: not-allowed;
+}
+.btn3d.ghost {
+  --c: var(--surface);
+  --cd: var(--line);
+  --fg: var(--blue);
+  border: 2px solid var(--line);
+}
+.btn3d.blue { --c: var(--blue); --cd: var(--blue-d); }
+.btn3d.amber { --c: var(--amber); --cd: var(--amber-d); }
+.btn3d.red { --c: var(--red); --cd: var(--red-d); }
+.btn3d.purple { --c: var(--purple); --cd: var(--purple-d); }
+.btn3d.yellow { --c: var(--yellow); --cd: var(--yellow-d); --fg: #6b4a00; }
+
+/* Bordered card with lip, Duolingo's tile look */
+.tile {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 2px 0 var(--line);
+}
+.tile-press {
+  transition: transform 80ms ease-out, box-shadow 80ms ease-out, border-color 150ms;
+  box-shadow: 0 4px 0 var(--line);
+}
+.tile-press:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--line);
+}
+
+/* Bubble rise used by many SVG scenes */
+@keyframes rise {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translateY(-60px) scale(1.1); opacity: 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes wobble {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes shimmer {
+  0% { transform: translateX(-120%) skewX(-20deg); }
+  100% { transform: translateX(220%) skewX(-20deg); }
+}
+.anim-float { animation: float 3s ease-in-out infinite; }
+.anim-wobble { animation: wobble 2.4s ease-in-out infinite; transform-origin: 50% 90%; }
+.anim-spin { animation: spin 8s linear infinite; transform-box: fill-box; transform-origin: center; }
+.svg-center { transform-box: fill-box; transform-origin: center; }
+
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
