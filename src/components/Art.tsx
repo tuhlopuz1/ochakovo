@@ -171,9 +171,17 @@ export function LessonArt({ kind, size = 160 }: { kind: LessonKind; size?: numbe
         .la-spark{animation:la-spark 1.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
         @keyframes la-spark{0%,100%{transform:scale(0);opacity:0}50%{transform:scale(1);opacity:1}}
         .la-sway{animation:la-sway 3s ease-in-out infinite;transform-origin:80px 0px}
+        .la-drive{animation:la-drive 1.2s ease-in-out infinite alternate}
+        @keyframes la-drive{from{transform:translate(-4px,0)}to{transform:translate(4px,-2px)}}
+        .la-road{animation:la-road .8s linear infinite}
+        @keyframes la-road{to{stroke-dashoffset:-16}}
+        .la-pin{animation:la-pin 1.6s cubic-bezier(.3,1.6,.5,1) infinite alternate}
+        @keyframes la-pin{from{transform:translateY(0)}to{transform:translateY(-8px)}}
+        .la-glow{animation:la-glow 2s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+        @keyframes la-glow{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
         @keyframes la-sway{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(7deg)}}
       `}</style>
-      {kind === "time" && (
+      {kind === "history" && (
         <g>
           <circle cx="80" cy="80" r="70" fill="none" stroke="var(--green)" strokeWidth="4" strokeDasharray="10 14" className="la-spin-slow" />
           <circle cx="80" cy="80" r="52" fill="#fff" stroke="var(--green-d)" strokeWidth="8" />
@@ -185,7 +193,7 @@ export function LessonArt({ kind, size = 160 }: { kind: LessonKind; size?: numbe
           <circle cx="80" cy="80" r="6" fill="#3c3c3c" />
         </g>
       )}
-      {kind === "brew" && (
+      {kind === "production" && (
         <g>
           <defs>
             <clipPath id="la-tank"><rect x="40" y="26" width="80" height="116" rx="40" /></clipPath>
@@ -205,7 +213,7 @@ export function LessonArt({ kind, size = 160 }: { kind: LessonKind; size?: numbe
           <rect x="66" y="142" width="28" height="12" rx="4" fill="#afafaf" />
         </g>
       )}
-      {kind === "bottle" && (
+      {kind === "qc" && (
         <g>
           <rect x="6" y="122" width="148" height="12" rx="6" fill="#4b4b4b" />
           <circle cx="20" cy="128" r="3" fill="#afafaf" />
@@ -229,32 +237,52 @@ export function LessonArt({ kind, size = 160 }: { kind: LessonKind; size?: numbe
           </g>
         </g>
       )}
-      {kind === "compass" && (
+      {kind === "sales" && (
         <g>
-          <circle cx="80" cy="80" r="64" fill="var(--purple)" />
-          <circle cx="80" cy="80" r="52" fill="#fff" />
-          {["С", "В", "Ю", "З"].map((l, i) => (
-            <text key={l} x="80" y="44" textAnchor="middle" fontWeight="900" fontSize="14" fill="#afafaf" transform={`rotate(${i * 90} 80 80)`}>
-              {l}
-            </text>
-          ))}
-          <g className="la-swing">
-            <path d="M80 36 L92 80 L68 80 Z" fill="var(--red)" />
-            <path d="M80 124 L92 80 L68 80 Z" fill="#cfd8dc" />
+          <circle cx="80" cy="80" r="66" fill="var(--blue-l)" />
+          <path d="M14 112 Q80 96 146 112" stroke="#afafaf" strokeWidth="14" strokeLinecap="round" fill="none" />
+          <path d="M20 110 Q80 95 140 110" stroke="#fff" strokeWidth="2" strokeDasharray="8 8" fill="none" className="la-road" />
+          <g className="la-drive">
+            <rect x="34" y="62" width="58" height="34" rx="6" fill="var(--blue)" />
+            <path d="M92 70 H108 L120 84 V96 H92 Z" fill="var(--blue-d)" />
+            <rect x="98" y="74" width="12" height="9" rx="2" fill="#ddf4ff" />
+            <circle cx="50" cy="98" r="8" fill="#3c3c3c" />
+            <circle cx="106" cy="98" r="8" fill="#3c3c3c" />
+            <rect x="42" y="70" width="40" height="6" rx="3" fill="#fff" opacity="0.7" />
           </g>
-          <circle cx="80" cy="80" r="7" fill="#3c3c3c" />
+          <g className="la-pin">
+            <path d="M118 22 a14 14 0 0 1 14 14 c0 12 -14 24 -14 24 s-14 -12 -14 -24 a14 14 0 0 1 14 -14z" fill="var(--red)" />
+            <circle cx="118" cy="36" r="5" fill="#fff" />
+          </g>
         </g>
       )}
-      {kind === "year" && (
+      {kind === "lab" && (
         <g>
-          {[0, 1, 2, 3].map((i) => (
-            <rect key={i} x={20 + i * 30} y={120 - i * 26} width="34" height={20 + i * 26} rx="6" fill={["var(--green)", "var(--blue)", "var(--amber)", "var(--purple)"][i]} />
-          ))}
-          <g className="la-hop">
-            <circle cx="37" cy="108" r="9" fill="var(--pink)" stroke="#fff" strokeWidth="3" />
+          <path d="M62 18 H98 M68 18 V62 L36 124 Q30 140 48 140 H112 Q130 140 124 124 L92 62 V18" fill="#fff" stroke="var(--purple-d)" strokeWidth="7" strokeLinejoin="round" />
+          <clipPath id="la-flask"><path d="M68 62 L36 124 Q30 140 48 140 H112 Q130 140 124 124 L92 62 Z" /></clipPath>
+          <g clipPath="url(#la-flask)">
+            <path fill="var(--purple)">
+              <animate attributeName="d" dur="2.2s" repeatCount="indefinite" values="M20 96 Q50 88 80 96 T140 96 V150 H20 Z;M20 96 Q50 104 80 96 T140 96 V150 H20 Z;M20 96 Q50 88 80 96 T140 96 V150 H20 Z" />
+            </path>
+            {[0, 1, 2, 3].map((i) => (
+              <circle key={i} className="la-bub" cx={60 + i * 12} cy="132" r={3 + (i % 2) * 2} fill="#fff" opacity="0.8" style={{ animationDelay: `${i * 0.5}s` }} />
+            ))}
           </g>
-          <path d="M126 18 V48" stroke="#4b4b4b" strokeWidth="4" strokeLinecap="round" />
-          <path d="M128 18 L150 26 L128 34 Z" fill="var(--red)" />
+          <g className="la-spark" transform="translate(118 30)"><path d="M0 -10 L3 -3 L10 0 L3 3 L0 10 L-3 3 L-10 0 L-3 -3 Z" fill="var(--yellow)" /></g>
+        </g>
+      )}
+      {kind === "marketing" && (
+        <g>
+          <g className="la-spin-slow">
+            {Array.from({ length: 10 }, (_, i) => (
+              <rect key={i} x="77" y="4" width="6" height="16" rx="3" fill="var(--yellow)" transform={`rotate(${i * 36} 80 80)`} />
+            ))}
+          </g>
+          <circle cx="80" cy="70" r="40" fill="var(--yellow)" className="la-glow" />
+          <path d="M66 76 Q80 56 94 76" stroke="#fff" strokeWidth="6" fill="none" strokeLinecap="round" />
+          <rect x="62" y="106" width="36" height="12" rx="4" fill="#afafaf" />
+          <rect x="66" y="120" width="28" height="10" rx="4" fill="#8f8f8f" />
+          <path d="M60 52 Q66 40 78 38" stroke="#fff" strokeWidth="6" strokeLinecap="round" opacity="0.6" fill="none" />
         </g>
       )}
       {kind === "chest" && (
@@ -270,7 +298,7 @@ export function LessonArt({ kind, size = 160 }: { kind: LessonKind; size?: numbe
           <rect x="72" y="88" width="16" height="22" rx="4" fill="var(--yellow)" stroke="var(--yellow-d)" strokeWidth="3" />
         </g>
       )}
-      {kind === "pass" && (
+      {kind === "final" && (
         <g className="la-sway">
           <path d="M60 0 L74 46 M100 0 L86 46" stroke="var(--blue)" strokeWidth="6" />
           <rect x="34" y="44" width="92" height="110" rx="14" fill="#fff" stroke="var(--line)" strokeWidth="5" />

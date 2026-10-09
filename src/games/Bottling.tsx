@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { BOTTLE_INFO, type BottleKind } from "../data/content";
 import { Mascot } from "../components/Mascot";
+import { MentorCard } from "../components/Mentor";
 import { sfx } from "../lib/sfx";
 import { useGame } from "../state/store";
 import { GameFrame, type GameProps } from "./common";
@@ -25,7 +26,7 @@ interface Pop {
 /* Arcade QC: bottles roll along a belt, tap the defective ones, let good ones pass.
    Speed ramps up. Teaches what quality control actually looks for. */
 export function Bottling({ onFinish, onExit }: GameProps) {
-  const unlock = useGame((s) => s.unlock);
+  const { unlock, setSkill, setDrink } = useGame();
   const [phase, setPhase] = useState<"brief" | "count" | "play" | "end">("brief");
   const [count, setCount] = useState(3);
   const [bottles, setBottles] = useState<B[]>([]);
@@ -38,6 +39,7 @@ export function Bottling({ onFinish, onExit }: GameProps) {
   const ids = useRef(0);
   const comboRef = useRef(0);
   const bRef = useRef<B[]>([]);
+  const drinkName = useGame((s) => s.drink.name) || "Без названия";
   const warned = useRef(new Set<number>());
 
   /* countdown */
@@ -136,10 +138,11 @@ export function Bottling({ onFinish, onExit }: GameProps) {
   /* finish */
   useEffect(() => {
     if (phase !== "end") return;
-    const { right, wrong, maxCombo } = stats.current;
+    const { right, wrong } = stats.current;
     const acc = right + wrong ? right / (right + wrong) : 0;
     if (acc >= 0.9) unlock("eagle");
-    if (maxCombo >= 8) unlock("combo");
+    setSkill("attention", Math.max(0.2, acc));
+    setDrink({ qa: acc });
     const t = window.setTimeout(() => onFinish({ stars: acc >= 0.9 ? 3 : acc >= 0.7 ? 2 : 1, stat: `Точность ${Math.round(acc * 100)}% · ${score} очков` }), 900);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,8 +161,10 @@ export function Bottling({ onFinish, onExit }: GameProps) {
     >
       {phase === "brief" && (
         <div className="mx-auto flex w-full max-w-[860px] flex-col px-4 pb-10 pt-4 sm:px-8">
-          <h1 className="text-2xl font-black text-ink sm:text-3xl">Ты на смене контроля качества</h1>
-          <p className="mt-1 max-w-[60ch] font-semibold text-ink-soft">Жми на бракованные бутылки, чтобы снять их с линии. Нормальные пропускай. Серия без ошибок умножает очки.</p>
+          <h1 className="text-2xl font-black text-ink sm:text-3xl">Партия «{drinkName}» идёт по линии</h1>
+          <div className="mt-4 max-w-[640px]">
+            <MentorCard id="qa" text="Жми на бракованные бутылки, чтобы снять их с линии. Нормальные пропускай. Серия без ошибок умножает очки. Вот что мы ищем:" compact />
+          </div>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
             {(["ok", ...KINDS] as BottleKind[]).map((k, i) => (
               <motion.div
@@ -286,7 +291,7 @@ export function Bottling({ onFinish, onExit }: GameProps) {
 
           <div className="mt-6 flex items-center gap-3 pb-10">
             <Mascot size={70} mood={combo >= 4 ? "happy" : "think"} />
-            <p className="max-w-[48ch] font-bold text-ink-soft">На реальном заводе так работают специалисты ОТК и лаборатории, только с камерами и датчиками.</p>
+            <p className="max-w-[52ch] font-bold text-ink-soft">На заводе «Очаково» линия разливает до 1000 бутылок в минуту. Брак ловят камеры, датчики и специалисты ОТК.</p>
           </div>
           <style>{`
             .belt-stripes{background:repeating-linear-gradient(90deg,#4b4b4b 0 22px,#5f5f5f 22px 44px);animation:belt 0.6s linear infinite}

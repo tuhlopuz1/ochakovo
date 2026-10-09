@@ -1,11 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { ACHIEVEMENTS, ALL_LESSONS, LEVELS, type Accessory, type AchievementId, type TrackId } from "../data/content";
+import { ALL_LESSONS, ARTIFACTS, LEVELS, type Accessory, type AchievementId, type ConceptId, type SkillId } from "../data/content";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const dayDiff = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
 
-export type Tab = "path" | "profile" | "league" | "shop";
+export type Tab = "path" | "museum" | "profile" | "league" | "shop";
 
 interface Daily {
   day: string;
@@ -15,35 +15,51 @@ interface Daily {
   claimed: string[];
 }
 
+/* The player's drink, built up shift by shift. Later shifts read earlier results. */
+export interface Drink {
+  concept: ConceptId | null;
+  fit: number; // 0..1, marketing
+  name: string;
+  labelColor: string;
+  recipe: { malt: number; sugar: number; time: number; gas: number; roast: boolean } | null;
+  labTries: number;
+  filtered: boolean | null;
+  qa: number | null; // accuracy 0..1
+  stores: number | null; // stores that listed the drink
+}
+
 export interface GameState {
   name: string;
+  uni: string;
   onboarded: boolean;
   xp: number;
   caps: number;
   done: Record<string, { stars: number; plays: number }>;
   achievements: AchievementId[];
+  artifacts: string[];
   owned: Accessory[];
   equipped: Accessory[];
   streak: number;
   lastDay: string | null;
   daily: Daily;
-  track: TrackId | null;
-  trackScores: Partial<Record<TrackId, number>>;
-  yearOutcome: "skill" | "team" | "drive" | null;
+  drink: Drink;
+  skills: Partial<Record<SkillId, number>>; // 0..1 per skill, from play style
   sound: boolean;
   applied: boolean;
 
   setName: (n: string) => void;
+  setUni: (u: string) => void;
   finishOnboarding: () => void;
   touchStreak: () => void;
   completeLesson: (id: string, r: { xp: number; caps: number; stars: number }) => void;
-  addCaps: (n: number) => void;
   markDone: (id: string) => void;
+  addCaps: (n: number) => void;
   unlock: (id: AchievementId) => void;
+  addArtifact: (id: string) => void;
+  setDrink: (p: Partial<Drink>) => void;
+  setSkill: (s: SkillId, v: number) => void;
   buy: (id: Accessory, price: number) => boolean;
   toggleEquip: (id: Accessory) => void;
-  setTrack: (t: TrackId, scores: Partial<Record<TrackId, number>>) => void;
-  setYearOutcome: (o: "skill" | "team" | "drive") => void;
   markShop: () => void;
   claimQuest: (id: string, caps: number) => void;
   toggleSound: () => void;
@@ -52,31 +68,33 @@ export interface GameState {
 }
 
 const freshDaily = (): Daily => ({ day: today(), xp: 0, games: 0, shop: false, claimed: [] });
+export const freshDrink = (): Drink => ({ concept: null, fit: 0, name: "", labelColor: "#58cc02", recipe: null, labTries: 0, filtered: null, qa: null, stores: null });
 
 const initial = {
   name: "",
+  uni: "",
   onboarded: false,
   xp: 0,
   caps: 10,
   done: {},
   achievements: [] as AchievementId[],
+  artifacts: [] as string[],
   owned: [] as Accessory[],
   equipped: [] as Accessory[],
   streak: 0,
   lastDay: null as string | null,
   daily: freshDaily(),
-  track: null,
-  trackScores: {},
-  yearOutcome: null,
+  drink: freshDrink(),
+  skills: {},
   sound: true,
   applied: false,
 };
 
-/* Head accessories are mutually exclusive, the rest stack */
 const HEAD: Accessory[] = ["helmet", "cap", "crown", "headphones"];
 
-/* Achievement toasts are UI-only, not persisted */
-export const useToasts = create<{ queue: AchievementId[]; push: (a: AchievementId) => void; shift: () => void }>((set) => ({
+/* Toasts are UI-only, not persisted */
+export type ToastItem = { kind: "ach"; id: AchievementId } | { kind: "artifact"; id: string };
+export const useToasts = create<{ queue: ToastItem[]; push: (a: ToastItem) => void; shift: () => void }>((set) => ({
   queue: [],
   push: (a) => set((s) => ({ queue: [...s.queue, a] })),
   shift: () => set((s) => ({ queue: s.queue.slice(1) })),
@@ -87,6 +105,7 @@ export const useGame = create<GameState>()(
     (set, get) => ({
       ...initial,
       setName: (name) => set({ name }),
+      setUni: (uni) => set({ uni }),
       finishOnboarding: () => set({ onboarded: true }),
       touchStreak: () => {
         const t = today();
@@ -115,13 +134,22 @@ export const useGame = create<GameState>()(
         });
         get().unlock("first");
       },
-      addCaps: (n) => set((s) => ({ caps: s.caps + n })),
       markDone: (id) => set((s) => ({ done: { ...s.done, [id]: { stars: 3, plays: (s.done[id]?.plays ?? 0) + 1 } } })),
+      addCaps: (n) => set((s) => ({ caps: s.caps + n })),
       unlock: (id) => {
         if (get().achievements.includes(id)) return;
         set((s) => ({ achievements: [...s.achievements, id] }));
-        useToasts.getState().push(id);
+        useToasts.getState().push({ kind: "ach", id });
       },
+      addArtifact: (id) => {
+        if (get().artifacts.includes(id)) return;
+        const next = [...get().artifacts, id];
+        set({ artifacts: next });
+        useToasts.getState().push({ kind: "artifact", id });
+        if (ARTIFACTS.every((a) => next.includes(a.id))) get().unlock("curator");
+      },
+      setDrink: (p) => set((s) => ({ drink: { ...s.drink, ...p } })),
+      setSkill: (k, v) => set((s) => ({ skills: { ...s.skills, [k]: Math.max(0, Math.min(1, v)) } })),
       buy: (id, price) => {
         const s = get();
         if (s.owned.includes(id) || s.caps < price) return false;
@@ -136,18 +164,14 @@ export const useGame = create<GameState>()(
           const base = HEAD.includes(id) ? s.equipped.filter((e) => !HEAD.includes(e)) : s.equipped;
           return { equipped: [...base, id] };
         }),
-      setTrack: (track, trackScores) => set({ track, trackScores }),
-      setYearOutcome: (yearOutcome) => set({ yearOutcome }),
       markShop: () => set((s) => ({ daily: { ...s.daily, shop: true } })),
       claimQuest: (id, caps) =>
         set((s) => (s.daily.claimed.includes(id) ? {} : { caps: s.caps + caps, daily: { ...s.daily, claimed: [...s.daily.claimed, id] } })),
       toggleSound: () => set((s) => ({ sound: !s.sound })),
-      apply: () => {
-        set({ applied: true });
-      },
-      reset: () => set({ ...initial, daily: freshDaily() }),
+      apply: () => set({ applied: true }),
+      reset: () => set({ ...initial, daily: freshDaily(), drink: freshDrink() }),
     }),
-    { name: "ochakovo-quest-v1" },
+    { name: "ochakovo-quest-v2" },
   ),
 );
 
@@ -162,7 +186,6 @@ export function levelOf(xp: number) {
   return { index: i, cur, next, pct };
 }
 
-/* First lesson that isn't done is the "current" one; everything after is locked */
 export function lessonStatus(done: GameState["done"]) {
   const firstOpen = ALL_LESSONS.findIndex((l) => !done[l.id]);
   return (idx: number): "done" | "current" | "locked" => {
@@ -172,10 +195,15 @@ export function lessonStatus(done: GameState["done"]) {
   };
 }
 
-export const achievementMeta = (id: AchievementId) => ACHIEVEMENTS.find((a) => a.id === id)!;
+/* Strongest skill from play style; falls back to precision */
+export function topSkill(skills: Partial<Record<SkillId, number>>): SkillId {
+  const entries = Object.entries(skills) as [SkillId, number][];
+  if (!entries.length) return "precision";
+  return entries.sort((a, b) => b[1] - a[1])[0][0];
+}
 
 export const QUESTS = [
   { id: "xp", title: "Набери 40 XP", goal: 40, caps: 10, get: (d: Daily) => d.xp },
-  { id: "games", title: "Пройди 2 игры", goal: 2, caps: 10, get: (d: Daily) => d.games },
+  { id: "games", title: "Отработай 2 смены", goal: 2, caps: 10, get: (d: Daily) => d.games },
   { id: "shop", title: "Загляни в магазин", goal: 1, caps: 5, get: (d: Daily) => (d.shop ? 1 : 0) },
 ];

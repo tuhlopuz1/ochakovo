@@ -1,21 +1,23 @@
 import { AnimatePresence, motion } from "motion/react";
-import { Check, Clock, Compass, Eye, Flask, IdentificationBadge, Lock, Stairs, Star, TreasureChest } from "@phosphor-icons/react";
+import { Check, Eye, Flask, Lightbulb, Lock, Bank, Star, Trophy, TreasureChest, Truck, CookingPot } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { ALL_LESSONS, UNITS, type LessonKind } from "../data/content";
 import { LessonArt } from "../components/Art";
 import { Mascot } from "../components/Mascot";
+import { DrinkBottle, STAGES } from "../components/Collect";
 import { sfx } from "../lib/sfx";
 import { lessonStatus, useGame } from "../state/store";
 import type { Origin } from "./LessonRunner";
 
 const ICON: Record<LessonKind, ComponentType<{ size?: number; weight?: "fill" | "bold"; color?: string }>> = {
-  time: Clock,
-  brew: Flask,
-  bottle: Eye,
-  compass: Compass,
-  year: Stairs,
+  history: Bank,
+  marketing: Lightbulb,
+  lab: Flask,
+  production: CookingPot,
+  qc: Eye,
+  sales: Truck,
   chest: TreasureChest,
-  pass: IdentificationBadge,
+  final: Trophy,
 };
 const OFFSETS = [0, 52, 78, 52, 0, -52, -78, -52];
 
@@ -41,6 +43,7 @@ export function PathScreen({ onStart }: { onStart: (lessonId: string, origin: Or
   let globalIdx = -1;
   return (
     <div className="mx-auto w-full max-w-[600px] px-4 pb-32 pt-4">
+      <BatchCard />
       {UNITS.map((unit, ui) => {
         const unitDone = unit.lessons.filter((l) => done[l.id]).length;
         return (
@@ -79,7 +82,7 @@ export function PathScreen({ onStart }: { onStart: (lessonId: string, origin: Or
                 const isCurrent = st === "current";
                 const isOpen = open === lesson.id;
                 const stars = done[lesson.id]?.stars ?? 0;
-                const isSpecial = lesson.kind === "chest" || lesson.kind === "pass";
+                const isSpecial = lesson.kind === "chest" || lesson.kind === "final";
                 const fill = st === "locked" ? "var(--line)" : lesson.kind === "chest" && st === "current" ? "var(--amber)" : unit.color;
                 const lip = st === "locked" ? "var(--line-strong)" : lesson.kind === "chest" && st === "current" ? "var(--amber-d)" : unit.colorD;
                 return (
@@ -172,7 +175,7 @@ export function PathScreen({ onStart }: { onStart: (lessonId: string, origin: Or
                             <>
                               {lesson.sub && <div className="relative mt-0.5 font-bold opacity-95">{lesson.sub}</div>}
                               <StartButton
-                                label={lesson.kind === "chest" ? (st === "done" ? "Уже открыт" : "Открыть") : lesson.kind === "pass" ? "Получить пропуск" : st === "done" ? "Повторить +XP" : `Начать +${lesson.xp} XP`}
+                                label={lesson.kind === "chest" ? (st === "done" ? "Уже открыт" : "Открыть") : lesson.kind === "final" ? "Забрать партию" : st === "done" ? "Повторить +XP" : `Начать +${lesson.xp} XP`}
                                 color={unit.colorD}
                                 disabled={lesson.kind === "chest" && st === "done"}
                                 onGo={(o) => {
@@ -213,5 +216,30 @@ function StartButton({ label, color, onGo, disabled }: { label: string; color: s
     >
       {label}
     </button>
+  );
+}
+
+/* The through-line: your batch fills up stage by stage */
+function BatchCard() {
+  const { drink, done, name } = useGame();
+  const stage = STAGES.filter((s) => done[s.id]).length;
+  return (
+    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="tile mb-6 flex items-center gap-4 p-4">
+      <div className="shrink-0">
+        <DrinkBottle drink={drink} owner={name} size={110} fill={stage / STAGES.length} showLabel={!!drink.concept} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-black uppercase tracking-wider text-ink-faint">Твоя первая партия</div>
+        <div className="truncate text-xl font-black text-ink">{drink.name ? `«${drink.name}»` : "Пока без названия"}</div>
+        <div className="mt-3 flex gap-1.5">
+          {STAGES.map((s, i) => (
+            <div key={s.id} className="flex-1">
+              <motion.div className="h-2.5 rounded-full" initial={false} animate={{ background: i < stage ? "var(--green)" : "var(--line)" }} transition={{ delay: i * 0.08 }} />
+              <div className={`mt-1 text-center text-[10px] font-black uppercase tracking-wide ${i < stage ? "text-green" : "text-ink-faint"}`}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
   );
 }

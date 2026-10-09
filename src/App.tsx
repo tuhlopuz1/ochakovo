@@ -1,21 +1,24 @@
 import { AnimatePresence, motion } from "motion/react";
-import { House, Storefront, Trophy, UserCircle } from "@phosphor-icons/react";
+import { Bank, Factory, Storefront, Trophy, UserCircle } from "@phosphor-icons/react";
 import { useEffect, useState, type ComponentType } from "react";
-import { ALL_LESSONS } from "./data/content";
+import { ALL_LESSONS, ARTIFACTS } from "./data/content";
+import { ArtifactIcon } from "./components/Collect";
 import { Mascot } from "./components/Mascot";
 import { sfx } from "./lib/sfx";
-import { achievementMeta, useGame, useToasts, type Tab } from "./state/store";
+import { useGame, useToasts, type Tab } from "./state/store";
+import { ACHIEVEMENTS } from "./data/content";
 import { Onboarding } from "./screens/Onboarding";
 import { PathScreen } from "./screens/PathScreen";
 import { LessonRunner, type Origin } from "./screens/LessonRunner";
 import { Chest } from "./screens/Chest";
-import { PassScreen } from "./screens/PassScreen";
+import { FinalScreen } from "./screens/FinalScreen";
 import { LeagueMini, LevelCard, QuestsCard, StatChips } from "./screens/Side";
-import { Badge, LeagueTab, ProfileTab, ShopTab } from "./screens/Tabs";
+import { Badge, LeagueTab, MuseumTab, ProfileTab, ShopTab } from "./screens/Tabs";
 
 const NAV: { id: Tab; label: string; Icon: ComponentType<{ size?: number; weight?: "fill" | "duotone"; color?: string }>; color: string }[] = [
-  { id: "path", label: "Путь", Icon: House, color: "var(--amber)" },
-  { id: "league", label: "Лига", Icon: Trophy, color: "var(--yellow-d)" },
+  { id: "path", label: "Завод", Icon: Factory, color: "var(--amber)" },
+  { id: "museum", label: "Музей", Icon: Bank, color: "var(--green)" },
+  { id: "league", label: "Кубок", Icon: Trophy, color: "var(--yellow-d)" },
   { id: "shop", label: "Магазин", Icon: Storefront, color: "var(--red)" },
   { id: "profile", label: "Профиль", Icon: UserCircle, color: "var(--purple)" },
 ];
@@ -62,7 +65,10 @@ function Shell() {
   const start = (id: string, origin: Origin) => {
     const l = ALL_LESSONS.find((x) => x.id === id)!;
     if (l.kind === "chest") return setChest(id);
-    if (l.kind === "pass") return setPass(true);
+    if (l.kind === "final") {
+      useGame.getState().markDone("final");
+      return setPass(true);
+    }
     setLesson({ id, origin });
   };
 
@@ -95,7 +101,7 @@ function Shell() {
           })}
         </nav>
         <div className="mt-auto px-3 text-xs font-bold leading-relaxed text-ink-faint">
-          Игровой проект для студентов и выпускников 18–26 лет о работе в «Очаково».
+          Выпусти свою первую партию кваса и узнай, кем ты можешь стать в «Очаково».
         </div>
       </aside>
 
@@ -123,6 +129,7 @@ function Shell() {
           >
             {tab === "path" && <PathScreen onStart={start} />}
             {tab === "profile" && <ProfileTab />}
+            {tab === "museum" && <MuseumTab />}
             {tab === "league" && <LeagueTab />}
             {tab === "shop" && <ShopTab />}
           </motion.div>
@@ -157,7 +164,7 @@ function Shell() {
 
       <AnimatePresence>{active && lesson && <LessonRunner key={lesson.id} lesson={active} origin={lesson.origin} onClose={() => setLesson(null)} />}</AnimatePresence>
       <AnimatePresence>{chest && <Chest id={chest} onClose={() => setChest(null)} />}</AnimatePresence>
-      <AnimatePresence>{pass && <PassScreen onClose={() => setPass(false)} />}</AnimatePresence>
+      <AnimatePresence>{pass && <FinalScreen onClose={() => setPass(false)} />}</AnimatePresence>
     </div>
   );
 }
@@ -168,18 +175,20 @@ function AchievementToasts() {
   useEffect(() => {
     if (!cur) return;
     const t1 = window.setTimeout(() => sfx("coin"), 200);
-    const t2 = window.setTimeout(shift, 2800);
+    const t2 = window.setTimeout(shift, 2600);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
     };
   }, [cur, shift]);
+  const ach = cur?.kind === "ach" ? ACHIEVEMENTS.find((a) => a.id === cur.id) : null;
+  const art = cur?.kind === "artifact" ? ARTIFACTS.find((a) => a.id === cur.id) : null;
   return (
     <div className="pointer-events-none fixed inset-x-0 top-3 z-[80] flex justify-center px-4">
       <AnimatePresence>
         {cur && (
           <motion.div
-            key={cur + queue.length}
+            key={cur.id + queue.length}
             initial={{ y: -120, scale: 0.8 }}
             animate={{ y: 0, scale: 1 }}
             exit={{ y: -120, opacity: 0 }}
@@ -188,12 +197,15 @@ function AchievementToasts() {
             style={{ boxShadow: "0 6px 0 var(--line)" }}
           >
             <motion.div initial={{ rotate: -180, scale: 0 }} animate={{ rotate: 0, scale: 1 }} transition={{ delay: 0.15, type: "spring", stiffness: 300, damping: 12 }}>
-              <Badge id={cur} unlocked size={52} />
+              {ach && <Badge id={ach.id} unlocked size={52} />}
+              {art && <ArtifactIcon art={art.art} color={art.color} size={56} />}
             </motion.div>
             <div>
-              <div className="text-xs font-black uppercase tracking-widest text-amber">Новый значок</div>
-              <div className="text-lg font-black text-ink">{achievementMeta(cur).name}</div>
-              <div className="text-sm font-semibold text-ink-soft">{achievementMeta(cur).desc}</div>
+              <div className="text-xs font-black uppercase tracking-widest" style={{ color: art ? "var(--green)" : "var(--amber)" }}>
+                {art ? "Новый экспонат в музее" : "Новый значок"}
+              </div>
+              <div className="text-lg font-black text-ink">{ach?.name ?? art?.title}</div>
+              <div className="text-sm font-semibold text-ink-soft">{ach?.desc ?? art?.year}</div>
             </div>
           </motion.div>
         )}

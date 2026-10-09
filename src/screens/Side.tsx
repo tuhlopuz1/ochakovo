@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Gift } from "@phosphor-icons/react";
-import { LEAGUE_BOTS } from "../data/content";
+import { UNIVERSITIES } from "../data/content";
 import { CapIcon, FlameIcon, ProgressBar, XpIcon } from "../components/ui";
 import { sfx } from "../lib/sfx";
 import { levelOf, QUESTS, useGame, type Tab } from "../state/store";
@@ -104,24 +104,26 @@ export function QuestsCard() {
   );
 }
 
-export function useLeague() {
-  const { xp, name } = useGame();
-  const rows = [...LEAGUE_BOTS, { name: name || "Ты", xp, color: "var(--green)", me: true as const }].sort((a, b) => b.xp - a.xp);
-  return rows;
+export function useCup() {
+  const { xp, uni } = useGame();
+  const mine = uni.trim();
+  const rows = UNIVERSITIES.map((u) => ({ ...u, me: !!mine && u.name.toLowerCase().includes(mine.toLowerCase().split(" ")[0]) }));
+  const hit = rows.find((r) => r.me);
+  if (hit) hit.xp += xp;
+  else if (mine) rows.push({ name: mine, xp, me: true });
+  return rows.sort((a, b) => b.xp - a.xp);
 }
 
 export function LeagueMini({ onOpen }: { onOpen: (t: Tab) => void }) {
-  const rows = useLeague();
-  const myPos = rows.findIndex((r) => "me" in r) + 1;
+  const rows = useCup();
+  const pos = rows.findIndex((r) => r.me) + 1;
   return (
     <button onClick={() => onOpen("league")} className="tile tile-press w-full p-5 text-left">
       <div className="flex items-center justify-between">
-        <div className="text-lg font-black text-ink">Лига квасоваров</div>
+        <div className="text-lg font-black text-ink">Кубок вузов</div>
         <span className="text-sm font-black uppercase tracking-wider text-blue">Открыть</span>
       </div>
-      <div className="mt-2 font-bold text-ink-soft">
-        Ты на <span className="font-black text-ink">{myPos} месте</span>. {myPos > 3 ? "Топ-3 выходят в следующую лигу." : "Ты в зоне повышения!"}
-      </div>
+      <div className="mt-2 font-bold text-ink-soft">{pos ? <>Твой вуз на <span className="font-black text-ink">{pos} месте</span>. Каждая смена добавляет очки.</> : "Укажи вуз, чтобы играть за него."}</div>
     </button>
   );
 }

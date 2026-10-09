@@ -5,10 +5,11 @@ import { Mascot } from "../components/Mascot";
 import { Bubble, CapIcon, KineticText } from "../components/ui";
 import { sfx } from "../lib/sfx";
 import { useGame } from "../state/store";
+import { UNIVERSITIES } from "../data/content";
 
 export function Onboarding() {
   const [step, setStep] = useState(0);
-  const { name, setName, finishOnboarding } = useGame();
+  const { name, setName, uni, setUni, finishOnboarding } = useGame();
 
   const go = (n: number) => {
     sfx("tap");
@@ -29,7 +30,7 @@ export function Onboarding() {
               </motion.div>
               <h1 className="text-4xl font-black leading-[1.08] text-ink sm:text-5xl lg:text-[54px] lg:[&>span]:whitespace-nowrap">
                 <span>
-                  <KineticText text="Устройся на завод." delay={0.1} />
+                  <KineticText text="Выпусти свой квас." delay={0.1} />
                 </span>
                 <br />
                 <span className="text-green">
@@ -37,7 +38,7 @@ export function Onboarding() {
                 </span>
               </h1>
               <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="mt-5 max-w-[44ch] text-lg font-semibold leading-relaxed text-ink-soft">
-                Свари квас, поймай брак на линии, найди свою профессию и забери пропуск на настоящую стажировку в «Очаково».
+                Пять смен на заводе «Очаково»: придумай напиток, подбери рецепт, свари, проверь и договорись с сетью. В финале: своя этикетка и путь в стажировку.
               </motion.p>
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1, type: "spring", stiffness: 300, damping: 20 }} className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <button className="btn3d px-10 py-4 text-base" onClick={() => go(1)}>
@@ -45,8 +46,8 @@ export function Onboarding() {
                 </button>
               </motion.div>
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }} className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm font-extrabold text-ink-faint">
-                <span>5 мини-игр</span>
-                <span>10 минут</span>
+                <span>5 смен</span>
+                <span>Музей истории</span>
                 <span>Без регистрации</span>
               </motion.div>
             </div>
@@ -71,7 +72,7 @@ export function Onboarding() {
               className="mt-8"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (name.trim()) go(2);
+                if (name.trim()) go(3);
               }}
             >
               <label htmlFor="nm" className="font-extrabold text-ink">
@@ -93,13 +94,56 @@ export function Onboarding() {
           </motion.section>
         )}
 
+        {step === 3 && (
+          <motion.section key="uni" initial={{ opacity: 0, x: 80 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -80 }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className="mx-auto flex min-h-[100dvh] max-w-[640px] flex-col justify-center px-4 py-10">
+            <div className="flex items-center gap-4">
+              <Mascot size={130} mood="wow" track />
+              <Bubble className="flex-1">Где учишься, {name.trim()}? Твой опыт пойдёт в зачёт вуза в Кубке вузов.</Bubble>
+            </div>
+            <form
+              className="mt-8"
+              onSubmit={(e) => {
+                e.preventDefault();
+                go(2);
+              }}
+            >
+              <label htmlFor="uni" className="font-extrabold text-ink">
+                Вуз или колледж
+              </label>
+              <input
+                id="uni"
+                autoFocus
+                list="uni-list"
+                maxLength={40}
+                value={uni}
+                onChange={(e) => setUni(e.target.value)}
+                className="mt-2 w-full rounded-2xl border-2 border-line bg-surface-2 px-5 py-4 text-xl font-extrabold text-ink outline-none transition-colors focus:border-blue focus:bg-surface"
+                placeholder="Например, Росбиотех"
+              />
+              <datalist id="uni-list">
+                {UNIVERSITIES.map((u) => (
+                  <option key={u.name} value={u.name} />
+                ))}
+              </datalist>
+              <div className="mt-6 flex gap-3">
+                <button type="button" className="btn3d ghost flex-1" onClick={() => (setUni(""), go(2))}>
+                  Пропустить
+                </button>
+                <button type="submit" disabled={!uni.trim()} className="btn3d flex-1">
+                  Дальше
+                </button>
+              </div>
+            </form>
+          </motion.section>
+        )}
+
         {step === 2 && (
           <motion.section key="gift" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="mx-auto flex min-h-[100dvh] max-w-[560px] flex-col items-center justify-center px-4 py-10 text-center">
             <Mascot size={170} mood="happy" />
             <h1 className="mt-4 text-3xl font-black text-ink">
               <KineticText text={`Рад знакомству, ${name.trim()}!`} />
             </h1>
-            <p className="mt-2 text-lg font-semibold text-ink-soft">Держи стартовые крышечки. Это валюта завода: за них в магазине можно одеть меня в каску или даже корону.</p>
+            <p className="mt-2 text-lg font-semibold text-ink-soft">Вот твой пропуск стажёра и стартовые крышечки. За них в магазине можно одеть меня в каску или даже корону. А теперь на экскурсию!</p>
             <motion.div initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ delay: 0.4, type: "spring", stiffness: 300, damping: 12 }} className="mt-6 flex items-center gap-2 rounded-2xl border-2 border-yellow bg-amber-l px-5 py-3 text-3xl font-black text-amber">
               <CapIcon size={36} /> +10
             </motion.div>

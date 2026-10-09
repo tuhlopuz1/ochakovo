@@ -1,46 +1,97 @@
 import { AnimatePresence, motion } from "motion/react";
-import { Cube, Drop, Fish, Flame, Grains, HardHat, Jar, Pepper, Snowflake } from "@phosphor-icons/react";
-import { useEffect, useRef, useState, type ComponentType } from "react";
-import { BREW_INGREDIENTS, BREW_ROLES } from "../data/content";
-import { Mascot } from "../components/Mascot";
+import { Flame, Funnel, Jar, Sparkle } from "@phosphor-icons/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CONCEPTS } from "../data/content";
+import { FactCard, MentorCard } from "../components/Mentor";
 import { sfx } from "../lib/sfx";
 import { useGame } from "../state/store";
 import { FeedbackSheet, GameFrame, type GameProps } from "./common";
 
-const ICONS: Record<string, ComponentType<{ size?: number; weight?: "fill" | "bold" | "duotone"; color?: string }>> = {
-  water: Drop,
-  malt: Grains,
-  sugar: Cube,
-  pepper: Pepper,
-  fish: Fish,
-};
-
-const STEP_TITLES = ["Собери сусло", "Нагрей до нужной температуры", "Запусти брожение", "Охлади квас"];
+const STEP_TITLES = ["Собери линию подачи воды", "Проведи затор", "Запусти брожение", "Фильтровать или нет?"];
 const STEP_HINTS = [
-  "Брось в танк только то, из чего делают настоящий квас.",
-  "Держи кнопку, чтобы греть. Удерживай стрелку в зелёной зоне.",
+  "Поворачивай трубы, чтобы вода дошла от водоподготовки до заторного чана.",
+  "Держи кнопку нагрева. Вода горячая, но не кипящая: удерживай стрелку в зелёной зоне.",
   "Добавь закваску и подбери тёплую температуру для брожения.",
-  "Жми на вентиль охлаждения, пока квас не станет холодным.",
+  "Последнее решение перед розливом. Здесь нет неправильного ответа.",
+];
+const STEP_FACTS = [
+  { title: "Вода готова!", text: "На каждом заводе «Очаково» своя станция водоподготовки: воду очищают, дехлорируют и умягчают.", who: "Инженер-механик" },
+  { title: "Затор готов!", text: "Дроблёный солод заливают горячей водой в чанах на 65 000 литров. Нагрев и паузы чередуются час-два, потом сусло фильтруют.", who: "Аппаратчик варки" },
+  { title: "Квас забродил!", text: "Брожение идёт в цилиндро-коническом танке на 700 000 литров, высотой с восьмиэтажный дом.", who: "Технолог и микробиолог" },
 ];
 
-/* Brewing simulator: four physical mini-interactions mapped to real production steps,
-   each ending with "who does this at the plant" so the game doubles as a career map. */
-export function Brew({ onFinish, onExit }: GameProps) {
-  const unlock = useGame((s) => s.unlock);
+/* ---------------- pipe puzzle ---------------- */
+type Tile = { kind: "straight" | "corner"; rot: number; path: boolean };
+const COLS = 5;
+const ROWS = 3;
+// N=0 E=1 S=2 W=3
+const SOLUTION: Record<string, { kind: Tile["kind"]; rot: number }> = {
+  "0,1": { kind: "straight", rot: 1 },
+  "1,1": { kind: "corner", rot: 2 },
+  "1,2": { kind: "corner", rot: 0 },
+  "2,2": { kind: "straight", rot: 1 },
+  "3,2": { kind: "corner", rot: 3 },
+  "3,1": { kind: "straight", rot: 0 },
+  "3,0": { kind: "corner", rot: 1 },
+  "4,0": { kind: "straight", rot: 1 },
+};
+const openings = (t: Tile) => (t.kind === "straight" ? [0, 2] : [0, 1]).map((d) => (d + t.rot) % 4);
+const DX = [0, 1, 0, -1];
+const DY = [-1, 0, 1, 0];
+
+function makeGrid(): Tile[] {
+  const g: Tile[] = [];
+  for (let y = 0; y < ROWS; y++)
+    for (let x = 0; x < COLS; x++) {
+      const s = SOLUTION[`${x},${y}`];
+      g.push(s ? { kind: s.kind, rot: (s.rot + 1 + Math.floor(Math.random() * 3)) % 4, path: true } : { kind: Math.random() > 0.5 ? "corner" : "straight", rot: Math.floor(Math.random() * 4), path: false });
+    }
+  return g;
+}
+
+/* Returns the visited cells (in order) and whether water reaches the outlet */
+function trace(g: Tile[]) {
+  let x = 0;
+  let y = 1;
+  let dir = 1; // travelling east into (0,1)
+  const seen: number[] = [];
+  for (let n = 0; n < 20; n++) {
+    if (x === COLS && y === 0) return { seen, ok: true };
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return { seen, ok: false };
+    const t = g[y * COLS + x];
+    const op = openings(t);
+    const entry = (dir + 2) % 4;
+    if (!op.includes(entry)) return { seen, ok: false };
+    seen.push(y * COLS + x);
+    dir = op.find((d) => d !== entry)!;
+    x += DX[dir];
+    y += DY[dir];
+  }
+  return { seen, ok: false };
+}
+
+/* Shift 3: brewing hall. Pipe puzzle -> mash heat -> fermentation -> filter decision. */
+export function Production({ onFinish, onExit }: GameProps) {
+  const { drink, setDrink, setSkill, unlock } = useGame();
+  const concept = CONCEPTS.find((c) => c.id === drink.concept) ?? CONCEPTS[0];
   const [step, setStep] = useState(0);
-  const [sheet, setSheet] = useState<null | "good" | "bad">(null);
+  const [sheet, setSheet] = useState<null | "good">(null);
   const [mistakes, setMistakes] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-
-  // tank state
-  const [added, setAdded] = useState<string[]>([]);
+  const [grid, setGrid] = useState<Tile[]>(() => {
+    let g = makeGrid();
+    while (trace(g).ok) g = makeGrid();
+    return g;
+  });
+  const [moves, setMoves] = useState(0);
   const [temp, setTemp] = useState(18);
   const [zoneT, setZoneT] = useState(0);
   const [starter, setStarter] = useState(false);
   const [fermT, setFermT] = useState(12);
   const [fermProg, setFermProg] = useState(0);
-  const [cool, setCool] = useState(0);
-  const [mood, setMood] = useState<"think" | "happy" | "sad" | "wow">("think");
+  const [filtered, setFiltered] = useState<boolean | null>(null);
+
+  const flow = useMemo(() => trace(grid), [grid]);
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -49,27 +100,23 @@ export function Brew({ onFinish, onExit }: GameProps) {
   const oops = (msg: string) => {
     sfx("bad");
     setMistakes((m) => m + 1);
-    setMood("sad");
     flash(msg);
-    window.setTimeout(() => setMood("think"), 900);
   };
 
-  /* ---- step 0: ingredients ---- */
-  const goodIds = BREW_INGREDIENTS.filter((i) => i.good).map((i) => i.id);
-  const addIngredient = (id: string) => {
-    const ing = BREW_INGREDIENTS.find((i) => i.id === id)!;
-    if (!ing.good) return oops(ing.nope);
-    if (added.includes(id)) return;
-    sfx("pop");
-    const next = [...added, id];
-    setAdded(next);
-    if (goodIds.every((g) => next.includes(g))) {
-      setMood("happy");
-      window.setTimeout(() => setSheet("good"), 500);
+  /* step 0: pipes */
+  const rotate = (k: number) => {
+    if (step !== 0 || flow.ok) return;
+    sfx("tap");
+    setMoves((m) => m + 1);
+    const g = grid.map((t, i) => (i === k ? { ...t, rot: (t.rot + 1) % 4 } : t));
+    setGrid(g);
+    if (trace(g).ok) {
+      sfx("win");
+      window.setTimeout(() => setSheet("good"), 900);
     }
   };
 
-  /* ---- step 1: heating (hold) ---- */
+  /* step 1: mash heat (hold) */
   const holding = useRef(false);
   useEffect(() => {
     if (step !== 1 || sheet) return;
@@ -84,14 +131,13 @@ export function Brew({ onFinish, onExit }: GameProps) {
       t = Math.max(18, t);
       if (t > 82) {
         t = 52;
-        oops("Перегрев! Сусло подгорело, начинаем заново.");
+        oops("Закипело! Солоду так нельзя, начинаем заново.");
       }
-      if (t >= 62 && t <= 70) z += dt;
+      if (t >= 62 && t <= 72) z += dt;
       setTemp(t);
       setZoneT(z);
       if (z >= 2.5) {
         holding.current = false;
-        setMood("happy");
         sfx("good");
         setSheet("good");
         return;
@@ -103,18 +149,16 @@ export function Brew({ onFinish, onExit }: GameProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, sheet]);
 
-  /* ---- step 2: fermentation (slider) ---- */
+  /* step 2: fermentation */
   const inFermZone = fermT >= 25 && fermT <= 30;
   useEffect(() => {
-    if (step !== 2 || !starter || sheet) return;
-    if (!inFermZone) return;
+    if (step !== 2 || !starter || sheet || !inFermZone) return;
     const id = window.setInterval(() => {
       setFermProg((p) => {
         const n = Math.min(1, p + 0.05);
         if (Math.random() > 0.5) sfx("bubble");
         if (n >= 1) {
           window.clearInterval(id);
-          setMood("happy");
           window.setTimeout(() => setSheet("good"), 300);
         }
         return n;
@@ -123,41 +167,28 @@ export function Brew({ onFinish, onExit }: GameProps) {
     return () => window.clearInterval(id);
   }, [step, starter, inFermZone, sheet]);
 
-  /* ---- step 3: cooling (taps) ---- */
-  const coolTap = () => {
-    if (cool >= 1) return;
-    sfx("bubble");
-    const n = Math.min(1, cool + 1 / 6);
-    setCool(n);
-    if (n >= 0.999) {
-      setMood("happy");
-      window.setTimeout(() => setSheet("good"), 400);
-    }
-  };
-
   const next = () => {
     sfx("tap");
     setSheet(null);
-    setMood("think");
-    if (step === 3) {
-      if (mistakes === 0) unlock("brewer");
-      onFinish({ stars: mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1, stat: mistakes === 0 ? "Идеальная партия" : `Промахов: ${mistakes}` });
-      return;
-    }
     setStep((s) => s + 1);
   };
 
-  // derived tank visuals
-  const level = step === 0 ? (added.length ? 0.12 + added.length * 0.2 : 0.03) : 0.72;
-  const hasMalt = added.includes("malt");
-  const liquid = cool > 0 ? mix("#b8620f", "#d98a2b", cool) : hasMalt ? "#b8620f" : added.includes("water") ? "#7fd3ff" : "#7fd3ff";
-  const bubbles = step === 2 ? (starter ? 0.25 + (inFermZone ? 0.75 : Math.max(0, 1 - Math.abs(fermT - 27.5) / 15) * 0.5) : 0) : step === 1 ? Math.max(0, (temp - 50) / 40) : step === 3 ? 0.6 * (1 - cool) : 0;
-  const steam = step === 1 && temp > 55;
-  const progress = (step + (sheet === "good" ? 1 : 0)) / 4;
+  const finish = () => {
+    const pipeScore = Math.max(0, 1 - Math.max(0, moves - 10) * 0.04);
+    setSkill("engineering", Math.max(0.3, pipeScore - mistakes * 0.15));
+    setDrink({ filtered });
+    if (mistakes === 0) unlock("engineer");
+    onFinish({ stars: mistakes === 0 ? 3 : mistakes <= 2 ? 2 : 1, stat: mistakes === 0 ? "Варка без единой ошибки" : `Перегревов: ${mistakes}` });
+  };
+
+  const level = step === 0 ? (flow.ok ? 0.35 : 0.05) : step === 1 ? 0.55 : 0.75;
+  const bubbles = step === 2 ? (starter ? 0.25 + (inFermZone ? 0.75 : Math.max(0, 1 - Math.abs(fermT - 27.5) / 15) * 0.5) : 0) : step === 1 ? Math.max(0, (temp - 50) / 40) : 0;
+  const liquid = step === 0 ? "#7fd3ff" : concept.liquid;
+  const progress = (step + (sheet ? 1 : 0) + (filtered !== null ? 1 : 0)) / 4;
 
   return (
     <GameFrame progress={progress} onExit={onExit} color="var(--amber)">
-      <div className="mx-auto grid w-full max-w-[1000px] flex-1 items-start gap-6 px-4 pb-48 pt-4 sm:px-8 md:grid-cols-[1.1fr_1fr] md:gap-10">
+      <div className="mx-auto grid w-full max-w-[1040px] flex-1 items-start gap-6 px-4 pb-48 pt-2 sm:px-8 md:grid-cols-[1.15fr_1fr] md:gap-10">
         <div className="order-2 md:order-1">
           <AnimatePresence mode="wait">
             <motion.div key={step} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ type: "spring", stiffness: 380, damping: 32 }}>
@@ -165,36 +196,12 @@ export function Brew({ onFinish, onExit }: GameProps) {
               <h1 className="mt-1 text-2xl font-black text-ink sm:text-3xl">{STEP_TITLES[step]}</h1>
               <p className="mt-1 font-semibold text-ink-soft">{STEP_HINTS[step]}</p>
 
-              <div className="mt-6">
-                {step === 0 && (
-                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                    {BREW_INGREDIENTS.map((ing, i) => {
-                      const Icon = ICONS[ing.id];
-                      const used = added.includes(ing.id);
-                      return (
-                        <motion.button
-                          key={ing.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: used ? 0.35 : 1, y: 0, scale: used ? 0.92 : 1 }}
-                          transition={{ delay: i * 0.05, type: "spring", stiffness: 400, damping: 24 }}
-                          whileTap={{ scale: 0.92 }}
-                          disabled={used}
-                          onClick={() => addIngredient(ing.id)}
-                          className="tile tile-press flex flex-col items-center gap-2 px-1 py-3 font-extrabold text-ink sm:px-3 sm:py-4"
-                        >
-                          <span className="grid h-14 w-14 place-items-center rounded-2xl" style={{ background: `color-mix(in srgb, ${ing.color} 18%, transparent)` }}>
-                            <Icon size={34} weight="fill" color={ing.color} />
-                          </span>
-                          <span className="text-sm">{ing.name}</span>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                )}
+              <div className="mt-5">
+                {step === 0 && <Pipes grid={grid} flow={flow.seen} ok={flow.ok} onRotate={rotate} />}
 
                 {step === 1 && (
                   <div className="flex items-center gap-6">
-                    <Gauge value={temp} min={18} max={85} zone={[62, 70]} unit="°C" />
+                    <Gauge value={temp} min={18} max={85} zone={[62, 72]} unit="°C" />
                     <div className="flex flex-1 flex-col gap-4">
                       <div className="text-4xl font-black tabular-nums text-ink">{Math.round(temp)}°C</div>
                       <ZoneMeter value={zoneT / 2.5} />
@@ -219,13 +226,7 @@ export function Brew({ onFinish, onExit }: GameProps) {
                   <div className="flex flex-col gap-5">
                     <motion.button
                       whileTap={{ scale: 0.94 }}
-                      onClick={() => {
-                        if (!starter) {
-                          sfx("pop");
-                          setStarter(true);
-                          setMood("wow");
-                        }
-                      }}
+                      onClick={() => !starter && (sfx("pop"), setStarter(true))}
                       className={`tile tile-press flex items-center gap-4 px-4 py-3 text-left ${starter ? "opacity-50" : ""}`}
                       disabled={starter}
                     >
@@ -233,7 +234,7 @@ export function Brew({ onFinish, onExit }: GameProps) {
                         <Jar size={30} weight="fill" color="var(--amber)" />
                       </span>
                       <span>
-                        <span className="block font-extrabold text-ink">{starter ? "Закваска в танке" : "Добавить закваску"}</span>
+                        <span className="block font-extrabold text-ink">{starter ? "Закваска в танке" : "Добавить фирменную закваску"}</span>
                         <span className="text-sm font-semibold text-ink-soft">Дрожжи + молочнокислые бактерии</span>
                       </span>
                     </motion.button>
@@ -244,16 +245,7 @@ export function Brew({ onFinish, onExit }: GameProps) {
                           {fermT}°C
                         </span>
                       </div>
-                      <input
-                        type="range"
-                        min={4}
-                        max={40}
-                        value={fermT}
-                        onChange={(e) => setFermT(+e.target.value)}
-                        className="brew-range mt-3 w-full"
-                        aria-label="Температура брожения"
-                        style={{ ["--p" as string]: `${((fermT - 4) / 36) * 100}%` }}
-                      />
+                      <input type="range" min={4} max={40} value={fermT} onChange={(e) => setFermT(+e.target.value)} className="brew-range mt-3 w-full" aria-label="Температура брожения" />
                       <div className="mt-1 flex justify-between text-xs font-bold text-ink-faint">
                         <span>Холодно</span>
                         <span>Тепло</span>
@@ -267,24 +259,33 @@ export function Brew({ onFinish, onExit }: GameProps) {
                 )}
 
                 {step === 3 && (
-                  <div className="flex items-center gap-6">
-                    <motion.button
-                      onClick={coolTap}
-                      whileTap={{ scale: 0.9 }}
-                      animate={{ rotate: cool * 360 }}
-                      transition={{ type: "spring", stiffness: 260, damping: 14 }}
-                      className="grid h-32 w-32 shrink-0 place-items-center rounded-full border-[6px] border-blue-d bg-blue text-white"
-                      style={{ boxShadow: "0 6px 0 var(--blue-d)" }}
-                      aria-label="Повернуть вентиль охлаждения"
-                    >
-                      <Snowflake size={64} weight="bold" />
-                    </motion.button>
-                    <div className="flex-1">
-                      <div className="text-4xl font-black tabular-nums text-blue">{Math.round(28 - cool * 22)}°C</div>
-                      <div className="mt-3">
-                        <ZoneMeter value={cool} color="var(--blue)" label="Охлаждение" />
-                      </div>
+                  <div className="flex flex-col gap-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { v: true, t: "Фильтровать", d: "Прозрачный, чистый вкус", Icon: Funnel },
+                        { v: false, t: "Не фильтровать", d: "С осадком, ярче вкус", Icon: Sparkle },
+                      ].map((o) => (
+                        <button
+                          key={String(o.v)}
+                          disabled={filtered !== null}
+                          onClick={() => (sfx("good"), setFiltered(o.v))}
+                          className="tile tile-press flex flex-col items-center gap-2 p-4 text-center"
+                          style={filtered === o.v ? { borderColor: "var(--amber)", background: "var(--amber-l)", boxShadow: "0 4px 0 var(--amber)" } : undefined}
+                        >
+                          <o.Icon size={34} weight="fill" color="var(--amber)" />
+                          <span className="font-black text-ink">{o.t}</span>
+                          <span className="text-sm font-semibold text-ink-soft">{o.d}</span>
+                        </button>
+                      ))}
                     </div>
+                    <FactCard show={filtered !== null} color="var(--amber)">
+                      «Очаковский» фильтруют, а «Семейный секрет» нет, поэтому в нём есть осадок. {filtered === concept.filtered ? "Ты поступил так же, как сделали бы на заводе с похожим квасом." : `Для похожего кваса на заводе выбрали бы «${concept.filtered ? "фильтровать" : "не фильтровать"}», но и твой вариант имеет право на жизнь.`}
+                    </FactCard>
+                    {filtered !== null && (
+                      <motion.button initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="btn3d amber w-full" onClick={finish}>
+                        На розлив!
+                      </motion.button>
+                    )}
                   </div>
                 )}
               </div>
@@ -293,35 +294,27 @@ export function Brew({ onFinish, onExit }: GameProps) {
 
           <AnimatePresence>
             {toast && (
-              <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mt-5 rounded-2xl bg-red-l px-4 py-3 font-extrabold text-red-d"
-              >
+              <motion.div initial={{ opacity: 0, y: 10, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10 }} className="mt-5 rounded-2xl bg-red-l px-4 py-3 font-extrabold text-red-d">
                 {toast}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        <div className="order-1 flex items-end justify-center gap-2 md:order-2">
-          <Mascot size={86} mood={mood} className="mb-2 hidden sm:block" />
-          <Tank level={level} color={liquid} bubbles={bubbles} steam={steam} frost={cool} foam={step >= 2 && starter} />
+        <div className="order-1 flex flex-col items-center gap-3 md:order-2">
+          <div className="w-full">
+            <MentorCard id="eng" text={["Начнём с воды: без неё ничего не сварить.", "Затор: солод плюс горячая вода. Только не кипяти!", "Танк на 700 000 литров ждёт закваску.", "Последнее слово за тобой, технолог."][step]} compact />
+          </div>
+          <Tank level={level} color={liquid} bubbles={bubbles} steam={step === 1 && temp > 55} frost={0} foam={step >= 2 && starter} />
         </div>
       </div>
 
       <FeedbackSheet
-        state={sheet}
-        title={["Сусло готово!", "Идеальный нагрев!", "Квас забродил!", "Квас готов!"][step]}
-        text={BREW_ROLES[step].note}
-        extra={
-          <div className="mt-3 inline-flex items-center gap-2 rounded-xl bg-surface px-3 py-2 text-sm font-extrabold text-ink">
-            <HardHat size={18} weight="fill" color="var(--amber)" /> На заводе это делает: {BREW_ROLES[step].who}
-          </div>
-        }
+        state={step < 3 ? sheet : null}
+        title={STEP_FACTS[Math.min(step, 2)].title}
+        text={STEP_FACTS[Math.min(step, 2)].text}
+        extra={<div className="mt-3 inline-flex rounded-xl bg-surface px-3 py-2 text-sm font-extrabold text-ink">На заводе это делает: {STEP_FACTS[Math.min(step, 2)].who}</div>}
         onNext={next}
-        nextLabel={step === 3 ? "Финиш" : "Дальше"}
       />
       <style>{`
         .brew-range{appearance:none;height:18px;border-radius:999px;background:linear-gradient(90deg,var(--blue) 0%,var(--green) 55%,var(--green) 72%,var(--red) 100%);outline:none}
@@ -332,12 +325,47 @@ export function Brew({ onFinish, onExit }: GameProps) {
   );
 }
 
-function mix(a: string, b: string, t: number) {
-  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
-  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
-  return `rgb(${pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(",")})`;
+function Pipes({ grid, flow, ok, onRotate }: { grid: Tile[]; flow: number[]; ok: boolean; onRotate: (k: number) => void }) {
+  return (
+    <div className="relative">
+      <div className="flex items-stretch">
+        <div className="flex flex-col justify-center pr-1">
+          <div className="mt-[33%] rounded-l-xl bg-blue px-2 py-3 text-[10px] font-black uppercase leading-tight text-white" style={{ writingMode: "vertical-rl" }}>
+            вода
+          </div>
+        </div>
+        <div className="grid flex-1 gap-1.5 rounded-2xl bg-surface-2 p-1.5" style={{ gridTemplateColumns: `repeat(${COLS}, 1fr)` }}>
+          {grid.map((t, k) => {
+            const wet = ok ? flow.includes(k) : flow.includes(k);
+            const order = flow.indexOf(k);
+            return (
+              <button key={k} onClick={() => onRotate(k)} aria-label="Повернуть трубу" className="aspect-square rounded-xl bg-surface" style={{ boxShadow: "inset 0 -3px 0 var(--line)" }}>
+                <motion.svg viewBox="0 0 60 60" className="h-full w-full" initial={false} animate={{ rotate: t.rot * 90 }} transition={{ type: "spring", stiffness: 400, damping: 22 }}>
+                  {t.kind === "straight" ? (
+                    <>
+                      <rect x="22" y="0" width="16" height="60" fill="#afbcc5" />
+                      <motion.rect x="26" y="0" width="8" height="60" initial={false} animate={{ fill: wet ? "#1cb0f6" : "#dfe7ec" }} transition={{ delay: ok ? order * 0.08 : 0 }} />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M30 0 V22 Q30 30 38 30 H60" stroke="#afbcc5" strokeWidth="16" fill="none" />
+                      <motion.path d="M30 0 V22 Q30 30 38 30 H60" strokeWidth="8" fill="none" initial={false} animate={{ stroke: wet ? "#1cb0f6" : "#dfe7ec" }} transition={{ delay: ok ? order * 0.08 : 0 }} />
+                    </>
+                  )}
+                </motion.svg>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-col pl-1">
+          <div className="rounded-r-xl px-2 py-3 text-[10px] font-black uppercase leading-tight text-white transition-colors" style={{ writingMode: "vertical-rl", background: ok ? "var(--green)" : "var(--amber)" }}>
+            чан
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
-
 function ZoneMeter({ value, color = "var(--green)", label = "В зоне" }: { value: number; color?: string; label?: string }) {
   return (
     <div>
